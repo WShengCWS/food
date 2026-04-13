@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F5F1EA">
+  <title>FoodTrack · Food Manager</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <main class="main-content">
+
+    <div class="page-header">
+      <div>
+        <h1>Food Manager</h1>
+        <p class="page-sub">Your food database</p>
+      </div>
+      <button class="btn btn--primary btn--sm" onclick="openFoodModal()">+ Add Food</button>
+    </div>
+
+    <!-- Search -->
+    <div class="search-wrapper">
+      <span class="search-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </span>
+      <input class="search-input" id="foodSearch" type="search" placeholder="Search foods…">
+    </div>
+
+    <!-- Category filter -->
+    <div class="cat-pills" id="catPills"></div>
+
+    <!-- Stats bar -->
+    <div class="flex-between mb-16">
+      <span class="text-muted text-sm" id="foodCount"></span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn--ghost btn--sm" id="filterCustom">Custom only</button>
+      </div>
+    </div>
+
+    <!-- Food list -->
+    <div id="foodList"></div>
+
+  </main>
+</div>
+
+<!-- Food Add/Edit Modal -->
+<div class="modal" id="foodModal">
+  <div class="modal__box" style="max-height:92vh;overflow-y:auto">
+    <div class="modal__header">
+      <h2 class="modal__title" id="foodModalTitle">Add Food</h2>
+      <button class="modal__close" onclick="closeModal('foodModal')">✕</button>
+    </div>
+    <div id="foodModalContent"></div>
+  </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/app.js"></script>
+<script src="js/nav.js"></script>
+<script>
+let allFoods = [];
+let filteredFoods = [];
+let editingFoodId = null;
+let showCustomOnly = false;
+let activeCategory = 'All';
+
+async function init() {
+  allFoods = await getFoods();
+  renderCatPills();
+  applyFilters();
+
+  document.getElementById('foodSearch').addEventListener('input', applyFilters);
+  document.getElementById('filterCustom').addEventListener('click', () => {
+    showCustomOnly = !showCustomOnly;
+    document.getElementById('filterCustom').classList.toggle('btn--primary', showCustomOnly);
+    document.getElementById('filterCustom').classList.toggle('btn--ghost', !showCustomOnly);
+    applyFilters();
+  });
+}
+
+function renderCatPills() {
+  const cats = ['All', ...new Set(allFoods.map(f => f.category || 'Other'))].sort();
+  const el = document.getElementById('catPills');
+  el.innerHTML = cats.map(c => `
+    <button class="cat-pill ${c === 'All' ? 'active' : ''}" onclick="filterCat('${c}', this)">${c}</button>
+  `).join('');
+}
+
+function filterCat(cat, btn) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = (document.getElementById('foodSearch').value || '').toLowerCase().trim();
+  filteredFoods = allFoods.filter(f => {
+    if (showCustomOnly && !f.custom) return false;
+    if (activeCategory !== 'All' && (f.category || 'Other') !== activeCategory) return false;
+    if (q && !f.name.toLowerCase().includes(q) && !(f.category||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('foodCount').textContent = `${filteredFoods.length} food${filteredFoods.length !== 1 ? 's' : ''} shown`;
+  renderFoodList();
+}
+
+function renderFoodList() {
+  const el = document.getElementById('foodList');
+  if (!filteredFoods.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state__icon">🔍</div><div class="empty-state__title">No foods found</div><div class="empty-state__sub">Try a different search or add a new food.</div></div>`;
+    return;
+  }
+
+  // Group by category
+  const groups = {};
+  filteredFoods.forEach(f => {
+    const cat = f.category || 'Other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(f);
+  });
+
+  el.innerHTML = Object.entries(groups).sort(([a],[b]) => a.localeCompare(b)).map(([cat, foods]) => `
+    <div class="mb-16">
+      <div class="section-label">${cat}</div>
+      ${foods.map(f => buildFoodItem(f)).join('')}
+    </div>
+  `).join('');
+}
+
+function buildFoodItem(f) {
+  const portions = f.defaultPortions ? Object.entries(f.defaultPortions).map(([k,v]) => `${k}: ${v}g`).join(', ') : '';
+  return `
+    <div class="food-item" id="foodItem-${f.id}">
+      <div class="food-item__header">
+        <span class="food-item__name">${f.name}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${f.custom ? '<span class="food-item__badge">Custom</span>' : ''}
+          <button class="btn btn--icon btn--sm" onclick="openFoodModal('${f.id}')" title="Edit"
+            style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn--icon btn--sm" onclick="deleteFoodItem('${f.id}')" title="Delete"
+            style="width:28px;height:28px;padding:0;color:var(--coral);display:flex;align-items:center;justify-content:center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="food-item__macros">
+        <span><b>${f.calories}</b> kcal</span>
+        <span>P: ${f.protein}g</span>
+        <span>C: ${f.carbs}g</span>
+        <span>F: ${f.fat}g</span>
+        <span>Fiber: ${f.fiber || 0}g</span>
+        <span style="color:var(--text-2)">per 100g</span>
+      </div>
+      ${portions ? `<div class="food-item__macros mt-4" style="color:var(--text-3)">Portions: ${portions}</div>` : ''}
+    </div>
+  `;
+}
+
+// ── Food Modal ────────────────────────────────────────────
+function openFoodModal(foodId = null) {
+  editingFoodId = foodId;
+  const food = foodId ? allFoods.find(f => f.id === foodId) : null;
+  document.getElementById('foodModalTitle').textContent = food ? 'Edit Food' : 'Add New Food';
+
+  const portions = food?.defaultPortions || {};
+  const portionHtml = Object.entries(portions).map(([k, v]) =>
+    buildPortionChip(k, v)
+  ).join('');
+
+  document.getElementById('foodModalContent').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Food Name *</label>
+      <input class="form-input" type="text" id="fName" placeholder="e.g. Grilled Chicken Thigh" value="${food?.name || ''}" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Category</label>
+      <select class="form-select" id="fCat">
+        ${['Grains','Poultry','Meat','Fish & Seafood','Eggs','Dairy','Plant Protein','Vegetables','Fruits','Nuts & Seeds','Fats & Spreads','Beverages','Mixed Dishes','Bread & Dough','Other'].map(c =>
+          `<option value="${c}" ${food?.category === c ? 'selected' : ''}>${c}</option>`
+        ).join('')}
+      </select>
+    </div>
+
+    <div class="section-label">Nutrition per 100g</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Calories (kcal)</label>
+        <input class="form-input" type="number" id="fCal" placeholder="0" value="${food?.calories ?? ''}" min="0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Protein (g)</label>
+        <input class="form-input" type="number" id="fPro" placeholder="0" value="${food?.protein ?? ''}" min="0" step="0.1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Carbs (g)</label>
+        <input class="form-input" type="number" id="fCarb" placeholder="0" value="${food?.carbs ?? ''}" min="0" step="0.1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fat (g)</label>
+        <input class="form-input" type="number" id="fFat" placeholder="0" value="${food?.fat ?? ''}" min="0" step="0.1">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fiber (g)</label>
+      <input class="form-input" type="number" id="fFiber" placeholder="0" value="${food?.fiber ?? ''}" min="0" step="0.1" style="max-width:140px">
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-label">Portion Sizes (optional)</div>
+    <p class="text-muted text-sm mb-8">Add common portion sizes for this food</p>
+
+    <div id="portionChips" class="chip-list" style="margin-bottom:12px">${portionHtml}</div>
+
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div class="form-group" style="flex:2;margin:0">
+        <label class="form-label">Portion name</label>
+        <input class="form-input" type="text" id="newPortionName" placeholder="e.g. 1 bowl">
+      </div>
+      <div class="form-group" style="flex:1;margin:0">
+        <label class="form-label">Grams</label>
+        <input class="form-input" type="number" id="newPortionGrams" placeholder="250" min="1">
+      </div>
+      <button class="btn btn--ghost btn--sm" style="margin-bottom:1px;white-space:nowrap" onclick="addPortionChip()">+ Add</button>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn--ghost" style="flex:1" onclick="closeModal('foodModal')">Cancel</button>
+      <button class="btn btn--primary" style="flex:1" onclick="saveFood()">Save Food</button>
+    </div>
+    ${food && food.custom ? `<button class="btn btn--danger btn--full mt-8" onclick="deleteFoodFromModal('${food.id}')">Delete This Food</button>` : ''}
+  `;
+
+  // Restore portions data attr
+  document.getElementById('portionChips').dataset.portions = JSON.stringify(portions);
+
+  openModal('foodModal');
+}
+
+function buildPortionChip(name, grams) {
+  return `<span class="chip">${name}: ${grams}g<span class="chip__del" onclick="removePortionChip(this, '${name}')">×</span></span>`;
+}
+
+function addPortionChip() {
+  const name = document.getElementById('newPortionName').value.trim();
+  const grams = parseInt(document.getElementById('newPortionGrams').value);
+  if (!name || !grams) { showToast('Enter portion name and grams', 'error'); return; }
+
+  const chips = document.getElementById('portionChips');
+  const portions = JSON.parse(chips.dataset.portions || '{}');
+  portions[name] = grams;
+  chips.dataset.portions = JSON.stringify(portions);
+  chips.insertAdjacentHTML('beforeend', buildPortionChip(name, grams));
+
+  document.getElementById('newPortionName').value = '';
+  document.getElementById('newPortionGrams').value = '';
+}
+
+function removePortionChip(el, name) {
+  const chips = document.getElementById('portionChips');
+  const portions = JSON.parse(chips.dataset.portions || '{}');
+  delete portions[name];
+  chips.dataset.portions = JSON.stringify(portions);
+  el.closest('.chip').remove();
+}
+
+function saveFood() {
+  const name = document.getElementById('fName').value.trim();
+  if (!name) { showToast('Food name is required', 'error'); return; }
+
+  const calories = parseFloat(document.getElementById('fCal').value) || 0;
+  const protein  = parseFloat(document.getElementById('fPro').value) || 0;
+  const carbs    = parseFloat(document.getElementById('fCarb').value) || 0;
+  const fat      = parseFloat(document.getElementById('fFat').value) || 0;
+  const fiber    = parseFloat(document.getElementById('fFiber').value) || 0;
+  const category = document.getElementById('fCat').value;
+  const portions = JSON.parse(document.getElementById('portionChips').dataset.portions || '{}');
+
+  const foodData = { name, calories, protein, carbs, fat, fiber, category, defaultPortions: portions };
+
+  if (editingFoodId) {
+    foodData.custom = true;
+    updateFood(editingFoodId, foodData);
+    showToast('Food updated');
+  } else {
+    addFood(foodData);
+    showToast('Food added');
+  }
+
+  closeModal('foodModal');
+  reloadFoods();
+}
+
+function deleteFoodItem(id) {
+  confirmAction('Delete this food? Any log entries using it will show as unknown.', () => {
+    deleteFood(id);
+    showToast('Food deleted');
+    reloadFoods();
+  });
+}
+
+function deleteFoodFromModal(id) {
+  closeModal('foodModal');
+  setTimeout(() => deleteFoodItem(id), 300);
+}
+
+async function reloadFoods() {
+  allFoods = await getFoods();
+  renderCatPills();
+  applyFilters();
+}
+
+init();
+</script>
+</body>
+</html>

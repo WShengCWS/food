@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F5F1EA">
+  <title>FoodTrack · My Log</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <main class="main-content">
+
+    <div class="page-header">
+      <div>
+        <h1>My Log</h1>
+        <p class="page-sub" id="logDateLabel"></p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="date" id="datePicker" class="form-input" style="width:150px;font-size:13px;padding:8px 10px">
+      </div>
+    </div>
+
+    <!-- Daily totals summary card -->
+    <div class="card" id="dayTotalsCard">
+      <div class="card__title">Daily Total</div>
+      <div id="dayTotalsContent"></div>
+    </div>
+
+    <!-- Meal groups -->
+    <div id="logGroups" class="mt-16"></div>
+
+    <!-- FAB -->
+    <a class="fab" href="add-food.html" aria-label="Add food">+</a>
+
+    <!-- Edit modal -->
+    <div class="modal" id="editModal">
+      <div class="modal__box">
+        <div class="modal__header">
+          <h2 class="modal__title">Edit Entry</h2>
+          <button class="modal__close" onclick="closeModal('editModal')">✕</button>
+        </div>
+        <div id="editModalContent"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/app.js"></script>
+<script src="js/nav.js"></script>
+<script>
+let allFoods = [];
+let currentDate = getTodayKey();
+let editingEntryId = null;
+
+async function init() {
+  allFoods = await getFoods();
+  const picker = document.getElementById('datePicker');
+  picker.value = currentDate;
+  picker.max = getTodayKey();
+  picker.addEventListener('change', () => {
+    currentDate = picker.value;
+    renderLog();
+  });
+  renderLog();
+}
+
+function renderLog() {
+  document.getElementById('logDateLabel').textContent = formatDateLabel(currentDate);
+  const entries = getDayLog(currentDate);
+  const targets = getTargets();
+  const totals  = sumLogTotals(entries, allFoods);
+
+  // Totals card
+  document.getElementById('dayTotalsContent').innerHTML = `
+    <div class="macro-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;margin-bottom:0">
+      ${miniMacro('Calories', totals.calories, targets.calories, 'kcal', 'calories')}
+      ${miniMacro('Protein',  totals.protein,  targets.protein,  'g',    'protein')}
+      ${miniMacro('Carbs',    totals.carbs,    targets.carbs,    'g',    'carbs')}
+      ${miniMacro('Fat',      totals.fat,      targets.fat,      'g',    'fat')}
+    </div>
+  `;
+
+  // Group by meal
+  const groups = {};
+  entries.forEach(e => {
+    const meal = e.meal || 'Uncategorised';
+    if (!groups[meal]) groups[meal] = [];
+    groups[meal].push(e);
+  });
+
+  const mealOrder = ['Breakfast','Lunch','Dinner','Snack','Pre-workout','Post-workout','Uncategorised'];
+  const sortedGroups = Object.entries(groups).sort(([a],[b]) => {
+    return (mealOrder.indexOf(a) ?? 99) - (mealOrder.indexOf(b) ?? 99);
+  });
+
+  const container = document.getElementById('logGroups');
+
+  if (entries.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state__icon">🍽</div>
+        <div class="empty-state__title">No entries for this day</div>
+        <div class="empty-state__sub">Tap + to log food</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = sortedGroups.map(([meal, grpEntries]) => {
+    const grpTotal = sumLogTotals(grpEntries, allFoods);
+    const items = grpEntries.map(e => buildLogItem(e)).join('');
+    return `
+      <div class="mb-16">
+        <div class="flex-between mb-8">
+          <div class="section-label" style="margin:0">${meal}</div>
+          <div class="text-mono text-muted" style="font-size:12px">${fmtNum(grpTotal.calories, 0)} kcal</div>
+        </div>
+        ${items}
+      </div>
+    `;
+  }).join('');
+}
+
+function miniMacro(label, val, target, unit, type) {
+  const pct = progressPct(val, target);
+  const over = val > target;
+  return `
+    <div>
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:4px">${label}</div>
+      <div style="font-family:var(--font-mono);font-size:1rem;font-weight:500">${fmtNum(val, 0)}<span style="font-size:10px;color:var(--text-3)"> ${unit}</span></div>
+      <div class="progress-bar" data-type="${type}" style="margin-top:6px">
+        <div class="progress-bar__fill ${over?'progress-bar__fill--over':''}" style="width:${pct}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function buildLogItem(entry) {
+  const food = allFoods.find(f => f.id === entry.foodId);
+  if (!food) return `<div class="log-item"><div class="log-item__info"><div class="log-item__name text-muted">Unknown food (deleted)</div></div></div>`;
+  const n = calcNutrition(food, entry.grams);
+  const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'}) : '';
+
+  return `
+    <div class="log-item" id="logItem-${entry.id}">
+      <div class="log-item__dot" style="background:var(--accent)"></div>
+      <div class="log-item__info">
+        <div class="log-item__name">${food.name}</div>
+        <div class="log-item__meta">${entry.grams}g${entry.meal ? ' · ' + entry.meal : ''}${time ? ' · ' + time : ''}</div>
+        <div class="log-item__meta" style="margin-top:2px">P:${n.protein}g C:${n.carbs}g F:${n.fat}g</div>
+      </div>
+      <div class="log-item__kcal">${fmtNum(n.calories, 0)}<span style="font-size:10px;color:var(--text-3)"> kcal</span></div>
+      <div class="log-item__actions">
+        <button class="btn btn--icon" onclick="openEdit(${entry.id})" title="Edit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn btn--icon" onclick="deleteEntry(${entry.id})" title="Delete" style="color:var(--coral)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function openEdit(entryId) {
+  const entries = getDayLog(currentDate);
+  const entry = entries.find(e => e.id === entryId);
+  if (!entry) return;
+  const food = allFoods.find(f => f.id === entry.foodId);
+  if (!food) return;
+  editingEntryId = entryId;
+
+  document.getElementById('editModalContent').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Food</label>
+      <div style="font-weight:500;font-size:15px;padding:10px 0">${food.name}</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Amount (grams)</label>
+      <div class="input-group">
+        <input class="form-input" type="number" id="editGrams" value="${entry.grams}" min="1">
+        <span class="input-group__suffix">g</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Meal</label>
+      <select class="form-select" id="editMeal">
+        <option value="">No label</option>
+        ${['Breakfast','Lunch','Dinner','Snack','Pre-workout','Post-workout'].map(m =>
+          `<option value="${m}" ${entry.meal === m ? 'selected' : ''}>${m}</option>`
+        ).join('')}
+      </select>
+    </div>
+    <div class="nutrition-preview" id="editPreview"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn--ghost" style="flex:1" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn--primary" style="flex:1" onclick="saveEdit()">Save</button>
+    </div>
+  `;
+
+  document.getElementById('editGrams').addEventListener('input', updateEditPreview);
+  updateEditPreview();
+  openModal('editModal');
+}
+
+function updateEditPreview() {
+  const entries = getDayLog(currentDate);
+  const entry = entries.find(e => e.id === editingEntryId);
+  if (!entry) return;
+  const food = allFoods.find(f => f.id === entry.foodId);
+  if (!food) return;
+  const g = parseFloat(document.getElementById('editGrams').value) || 0;
+  const n = calcNutrition(food, g);
+  document.getElementById('editPreview').innerHTML = `
+    <div class="nutrition-preview__item"><div class="nutrition-preview__val">${fmtNum(n.calories,0)}</div><div class="nutrition-preview__lbl">kcal</div></div>
+    <div class="nutrition-preview__item"><div class="nutrition-preview__val">${fmtNum(n.protein)}g</div><div class="nutrition-preview__lbl">Protein</div></div>
+    <div class="nutrition-preview__item"><div class="nutrition-preview__val">${fmtNum(n.carbs)}g</div><div class="nutrition-preview__lbl">Carbs</div></div>
+    <div class="nutrition-preview__item"><div class="nutrition-preview__val">${fmtNum(n.fat)}g</div><div class="nutrition-preview__lbl">Fat</div></div>
+  `;
+}
+
+function saveEdit() {
+  const g = parseFloat(document.getElementById('editGrams').value);
+  const meal = document.getElementById('editMeal').value;
+  if (!g || g <= 0) { showToast('Enter valid grams', 'error'); return; }
+  updateLogEntry(editingEntryId, { grams: g, meal }, currentDate);
+  closeModal('editModal');
+  showToast('Entry updated');
+  renderLog();
+}
+
+function deleteEntry(entryId) {
+  confirmAction('Delete this food entry?', () => {
+    deleteLogEntry(entryId, currentDate);
+    showToast('Entry deleted');
+    renderLog();
+  });
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#F5F1EA">
+  <title>FoodTrack · Settings</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <main class="main-content">
+
+    <div class="page-header">
+      <div>
+        <h1>Settings</h1>
+        <p class="page-sub">Targets, portions & data</p>
+      </div>
+    </div>
+
+    <!-- Daily Targets -->
+    <div class="card">
+      <div class="card__title">Daily Nutrition Targets</div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Calories</div>
+          <div class="settings-row__sub">kcal per day</div>
+        </div>
+        <div class="input-group" style="width:130px">
+          <input class="form-input settings-row__input" type="number" id="tCal" min="500" max="10000" step="50">
+          <span class="input-group__suffix">kcal</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Protein</div>
+          <div class="settings-row__sub">grams per day</div>
+        </div>
+        <div class="input-group" style="width:120px">
+          <input class="form-input settings-row__input" type="number" id="tPro" min="10" max="500" step="5">
+          <span class="input-group__suffix">g</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Carbohydrates</div>
+          <div class="settings-row__sub">grams per day</div>
+        </div>
+        <div class="input-group" style="width:120px">
+          <input class="form-input settings-row__input" type="number" id="tCarb" min="10" max="800" step="5">
+          <span class="input-group__suffix">g</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Fat</div>
+          <div class="settings-row__sub">grams per day</div>
+        </div>
+        <div class="input-group" style="width:120px">
+          <input class="form-input settings-row__input" type="number" id="tFat" min="10" max="300" step="5">
+          <span class="input-group__suffix">g</span>
+        </div>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Fiber</div>
+          <div class="settings-row__sub">grams per day</div>
+        </div>
+        <div class="input-group" style="width:120px">
+          <input class="form-input settings-row__input" type="number" id="tFiber" min="0" max="100" step="1">
+          <span class="input-group__suffix">g</span>
+        </div>
+      </div>
+
+      <div class="mt-16" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn--ghost btn--sm" onclick="setPreset('cut')">🔻 Cut (1600 kcal)</button>
+        <button class="btn btn--ghost btn--sm" onclick="setPreset('maintain')">⚖ Maintain (2000 kcal)</button>
+        <button class="btn btn--ghost btn--sm" onclick="setPreset('bulk')">🔼 Bulk (2500 kcal)</button>
+      </div>
+
+      <button class="btn btn--primary btn--full mt-16" onclick="saveTargets_()">Save Targets</button>
+    </div>
+
+    <!-- Portion Sizes -->
+    <div class="card mt-12">
+      <div class="card__title">Personalised Portion Sizes</div>
+      <p class="text-muted text-sm mb-16">Set what each portion means in grams for <em>your</em> body</p>
+      <div id="portionRows"></div>
+      <div style="display:flex;gap:8px;margin-top:16px;align-items:flex-end">
+        <div class="form-group" style="flex:2;margin:0">
+          <label class="form-label">New portion name</label>
+          <input class="form-input" type="text" id="newPName" placeholder="e.g. scoop">
+        </div>
+        <div class="form-group" style="flex:1;margin:0">
+          <label class="form-label">Grams</label>
+          <input class="form-input" type="number" id="newPGrams" placeholder="30" min="1">
+        </div>
+        <button class="btn btn--ghost btn--sm" style="margin-bottom:1px" onclick="addCustomPortion()">+ Add</button>
+      </div>
+      <button class="btn btn--primary btn--full mt-16" onclick="savePortions_()">Save Portion Sizes</button>
+    </div>
+
+    <!-- Data Management -->
+    <div class="card mt-12">
+      <div class="card__title">Data Management</div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Export Backup</div>
+          <div class="settings-row__sub">Download all data as JSON</div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="exportAllData()">⬇ Export</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Import Backup</div>
+          <div class="settings-row__sub">Restore from JSON file</div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="document.getElementById('importFile').click()">⬆ Import</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+      </div>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-row__label">Reset Foods</div>
+          <div class="settings-row__sub">Reload default food database</div>
+        </div>
+        <button class="btn btn--ghost btn--sm" onclick="resetFoods()" style="color:var(--amber)">Reset</button>
+      </div>
+
+      <div class="settings-row" style="border-bottom:none">
+        <div>
+          <div class="settings-row__label" style="color:var(--coral)">Clear All Data</div>
+          <div class="settings-row__sub">Wipe all logs and settings</div>
+        </div>
+        <button class="btn btn--danger btn--sm" onclick="clearAllData()">Clear</button>
+      </div>
+    </div>
+
+    <!-- App info -->
+    <div class="card mt-12">
+      <div class="card__title">About</div>
+      <div class="settings-row">
+        <div class="settings-row__label">FoodTrack</div>
+        <div class="text-muted text-sm">v1.0.0</div>
+      </div>
+      <div class="settings-row" style="border-bottom:none">
+        <div class="settings-row__label">Storage</div>
+        <div class="text-mono text-sm" id="storageSize"></div>
+      </div>
+    </div>
+
+    <div style="height:24px"></div>
+
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/app.js"></script>
+<script src="js/nav.js"></script>
+<script>
+let currentPortions = {};
+
+function init() {
+  const targets = getTargets();
+  document.getElementById('tCal').value   = targets.calories;
+  document.getElementById('tPro').value   = targets.protein;
+  document.getElementById('tCarb').value  = targets.carbs;
+  document.getElementById('tFat').value   = targets.fat;
+  document.getElementById('tFiber').value = targets.fiber || 30;
+
+  currentPortions = getPortions();
+  renderPortionRows();
+  updateStorageSize();
+}
+
+function renderPortionRows() {
+  const container = document.getElementById('portionRows');
+  container.innerHTML = Object.entries(currentPortions).map(([name, grams]) => `
+    <div class="settings-row" id="prow-${name}">
+      <div>
+        <div class="settings-row__label" style="text-transform:capitalize">${name}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="input-group" style="width:110px">
+          <input class="form-input settings-row__input" type="number" id="pval-${name}" value="${grams}" min="1" max="2000">
+          <span class="input-group__suffix">g</span>
+        </div>
+        <button class="btn btn--icon btn--sm" onclick="removePortionRow('${name}')" style="color:var(--coral);width:28px;height:28px;padding:0;flex-shrink:0">×</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addCustomPortion() {
+  const name = document.getElementById('newPName').value.trim().toLowerCase();
+  const grams = parseInt(document.getElementById('newPGrams').value);
+  if (!name || !grams) { showToast('Enter name and grams', 'error'); return; }
+  currentPortions[name] = grams;
+  renderPortionRows();
+  document.getElementById('newPName').value = '';
+  document.getElementById('newPGrams').value = '';
+}
+
+function removePortionRow(name) {
+  delete currentPortions[name];
+  renderPortionRows();
+}
+
+function saveTargets_() {
+  const t = {
+    calories: parseInt(document.getElementById('tCal').value) || 2000,
+    protein:  parseInt(document.getElementById('tPro').value) || 150,
+    carbs:    parseInt(document.getElementById('tCarb').value) || 250,
+    fat:      parseInt(document.getElementById('tFat').value) || 70,
+    fiber:    parseInt(document.getElementById('tFiber').value) || 30
+  };
+  saveTargets(t);
+  showToast('Targets saved ✓');
+}
+
+function savePortions_() {
+  // Read current input values
+  Object.keys(currentPortions).forEach(name => {
+    const val = parseInt(document.getElementById(`pval-${name}`)?.value);
+    if (val) currentPortions[name] = val;
+  });
+  savePortions(currentPortions);
+  showToast('Portion sizes saved ✓');
+}
+
+function setPreset(type) {
+  const presets = {
+    cut:      { calories: 1600, protein: 140, carbs: 160, fat: 55, fiber: 30 },
+    maintain: { calories: 2000, protein: 150, carbs: 250, fat: 65, fiber: 30 },
+    bulk:     { calories: 2500, protein: 180, carbs: 310, fat: 80, fiber: 35 }
+  };
+  const p = presets[type];
+  if (!p) return;
+  document.getElementById('tCal').value   = p.calories;
+  document.getElementById('tPro').value   = p.protein;
+  document.getElementById('tCarb').value  = p.carbs;
+  document.getElementById('tFat').value   = p.fat;
+  document.getElementById('tFiber').value = p.fiber;
+  showToast(`Preset applied — remember to save`);
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = importAllData(e.target.result);
+    if (result.success) {
+      showToast('Data imported successfully ✓');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      showToast('Import failed: ' + result.error, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function resetFoods() {
+  confirmAction('Reset to default food database? Your custom foods will be removed.', () => {
+    localStorage.removeItem(KEYS.FOODS);
+    showToast('Foods reset — reload to see defaults');
+    setTimeout(() => location.reload(), 800);
+  });
+}
+
+function clearAllData() {
+  confirmAction('⚠️ This will delete ALL your logs, foods, and settings permanently. Are you sure?', () => {
+    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
+    showToast('All data cleared');
+    setTimeout(() => location.reload(), 800);
+  });
+}
+
+function updateStorageSize() {
+  let total = 0;
+  Object.values(KEYS).forEach(k => {
+    const item = localStorage.getItem(k);
+    if (item) total += item.length * 2; // approx bytes (UTF-16)
+  });
+  const kb = (total / 1024).toFixed(1);
+  document.getElementById('storageSize').textContent = `${kb} KB used`;
+}
+
+init();
+</script>
+</body>
+</html>
