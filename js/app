@@ -1,0 +1,118 @@
+// ============================================================
+// app.js — Shared UI helpers, nav highlighting, toast system
+// ============================================================
+
+// ── Toast notifications ────────────────────────────────────
+function showToast(message, type = 'success') {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${type}`;
+  toast.innerHTML = `
+    <span class="toast__icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+    <span class="toast__msg">${message}</span>
+  `;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast--show'));
+  setTimeout(() => {
+    toast.classList.remove('toast--show');
+    setTimeout(() => toast.remove(), 300);
+  }, 2800);
+}
+
+// ── Active nav link ────────────────────────────────────────
+function highlightNav() {
+  const page = location.pathname.split('/').pop() || 'index.html';
+  document.querySelectorAll('.nav__link').forEach(link => {
+    const href = link.getAttribute('href').split('/').pop();
+    link.classList.toggle('nav__link--active', href === page);
+  });
+}
+
+// ── Modal helpers ──────────────────────────────────────────
+function openModal(id) {
+  const m = document.getElementById(id);
+  if (m) { m.classList.add('modal--open'); document.body.style.overflow = 'hidden'; }
+}
+
+function closeModal(id) {
+  const m = document.getElementById(id);
+  if (m) { m.classList.remove('modal--open'); document.body.style.overflow = ''; }
+}
+
+// Close modal on backdrop click
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal')) {
+    e.target.classList.remove('modal--open');
+    document.body.style.overflow = '';
+  }
+});
+
+// ── Confirm dialog ─────────────────────────────────────────
+function confirmAction(message, onConfirm) {
+  const existing = document.querySelector('.confirm-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <p class="confirm-msg">${message}</p>
+      <div class="confirm-actions">
+        <button class="btn btn--ghost" id="confirmNo">Cancel</button>
+        <button class="btn btn--danger" id="confirmYes">Delete</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('confirm-overlay--show'));
+
+  document.getElementById('confirmYes').addEventListener('click', () => {
+    overlay.remove();
+    onConfirm();
+  });
+  document.getElementById('confirmNo').addEventListener('click', () => overlay.remove());
+}
+
+// ── Animate number counter ─────────────────────────────────
+function animateCount(el, target, duration = 600, decimals = 0) {
+  const start = parseFloat(el.textContent) || 0;
+  const startTime = performance.now();
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+    el.textContent = decimals ? current.toFixed(decimals) : Math.round(current);
+    if (progress < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// ── Build progress bar HTML ────────────────────────────────
+function buildProgressBar(consumed, target, type) {
+  const pct = progressPct(consumed, target);
+  const over = consumed > target;
+  return `
+    <div class="progress-bar" data-type="${type}">
+      <div class="progress-bar__fill ${over ? 'progress-bar__fill--over' : ''}" style="width: ${pct}%"></div>
+    </div>
+  `;
+}
+
+// ── Format date display ────────────────────────────────────
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const diff = Math.round((today - d) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-MY', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// ── Init ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  highlightNav();
+});
